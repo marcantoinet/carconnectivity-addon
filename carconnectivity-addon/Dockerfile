@@ -1,6 +1,5 @@
 ARG BUILD_FROM
 FROM ${BUILD_FROM}
-
 ARG BUILD_ARCH
 ARG BUILD_DESCRIPTION
 ARG BUILD_NAME
@@ -17,10 +16,8 @@ ARG MQTT_VERSION
 ARG MQTTHA_VERSION
 ARG WEBUI_VERSION
 ARG CC_VERSION
-
 COPY rootfs /
 WORKDIR /tmp/
-
 RUN echo "ADDON_VERSION=v${BUILD_VERSION}" >> versions.txt && \
     apk add --no-cache --update musl curl nginx py3-pip build-base libffi-dev && \
     python3 -m venv /opt/venv && \
@@ -54,6 +51,15 @@ RUN echo "ADDON_VERSION=v${BUILD_VERSION}" >> versions.txt && \
     mkdir -p /run/nginx && \
     chmod +x /tmp/entrypoint.sh
 
+# ── CA SPIN fix ────────────────────────────────────────────────────────────────
+# Replaces self.session.user_id (IDP ssoid) with backend-local sub from
+# the access token JWT for SpinService and RRS calls on the ca00 backend.
+# See: https://github.com/zackcornelius/CarConnectivity-connector-volkswagen-na
+COPY patches/connector.py /opt/venv/lib/python3.14/site-packages/carconnectivity_connectors/volkswagen_na/connector.py
+COPY patches/openid_session.py /opt/venv/lib/python3.14/site-packages/carconnectivity_connectors/volkswagen_na/auth/openid_session.py
+RUN find /opt/venv/lib -name "*.pyc" -path "*/volkswagen_na/*" -delete
+# ──────────────────────────────────────────────────────────────────────────────
+
 LABEL \
     io.hass.name="${BUILD_NAME}" \
     io.hass.description="${BUILD_DESCRIPTION}" \
@@ -65,9 +71,7 @@ LABEL \
     org.opencontainers.image.title="${BUILD_NAME}" \
     org.opencontainers.image.created="${BUILD_DATE}" \
     org.opencontainers.image.version="${BUILD_VERSION}"
-
 ENTRYPOINT ["/bin/sh", "-c", "/tmp/entrypoint.sh"]
-
 # HEALTHCHECK --interval=1m CMD \
 #     [ -f "/tmp/carconnectivity_healthy" ] && \
 #     grep -q "^healthy$" "/tmp/carconnectivity_healthy" && \
